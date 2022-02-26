@@ -38,18 +38,25 @@ end
 
 sensor_data = [vel; mega];
 sensor_data = sensor_data + randn(size(sensor_data))*0.15;
+acc = acc + randn(size(acc))*0.15;
+ang_vel = ang_vel + randn(size(ang_vel))*0.15;
 
 figure; hold on;
 for i = 1:4
     plot(time_slice, sensor_data(i, :));
 end
+plot(time_slice, acc(1, :));
+plot(time_slice, acc(2, :));
+plot(time_slice, ang_vel);
 hold off; xlabel("Time(s)"); ylabel("measuremeant"); title("sensor data"); grid on
-legend(["v_x", "v_y", "m_1", "m_2"], "Location", "best");
+legend(["v_x", "v_y", "m_1", "m_2", "acc_x", "acc_y", "ang_vel"], "Location", "best");
 
 %% KF
 state_vector = zeros([5, 1]);
 P = 0.01*diag(ones([1, 5]));
-Q = 0.000*diag(ones([1, 5])); % tunable
+sigma_ax = 0.15;
+sigma_ay = 0.15;
+sigma_omega = 0.15;
 R = 0.0225*diag(ones([1, 4])); % tunable(0.15^2)
 epsilon_trace = [];
 for i = 1:size(sensor_data, 2)-1
@@ -67,6 +74,14 @@ for i = 1:size(sensor_data, 2)-1
                     T*cos(state_vector(3, i)), -T*sin(state_vector(3, i)); ...
                     T*state_vector(4, i)*cos(state_vector(3, i))-T*state_vector(5, i)*sin(state_vector(3, i)), ...
                     T*sin(state_vector(3, i)), T*cos(state_vector(3, i))];
+    Q = [T^4/4 * cos(state_vector(3, i))^2 * sigma_ax^2 + T^4/4 * sin(state_vector(3, i))^2 * sigma_ay^2, ...
+        0, 0, ...
+        T^3/2 * cos(state_vector(3, i)) * sigma_ax^2, -T^3/2 * sin(state_vector(3, i)) * sigma_ay^2; ...
+        0, T^4/4 * sin(state_vector(3, i))^2 * sigma_ax^2 + T^4/4 * cos(state_vector(3, i))^2 * sigma_ay^2, 0, ...
+        T^3/2 * sin(state_vector(3, i)) * sigma_ax^2, -T^3/2 * cos(state_vector(3, i)) * sigma_ay^2; ...
+        0, 0, T^2 * sigma_omega^2, 0, 0; ...
+        0, 0, 0, T^2*sigma_ax^2, 0; ...
+        0, 0, 0, 0, T^2*sigma_ay^2];
     P = F * P * F' + Q;
     % measurement update
     H = [0, 0, 0, 1, 0; ...
@@ -116,3 +131,9 @@ plot(time_slice, ang);
 legend(["estimated angular", "real angular"], "Location", "best");
 xlabel("Time(s)"); ylabel("ang(rad)"); grid on; 
 title("ang"); hold off
+
+pst_err = sqrt((pst(1, :) - state_vector(1, :)).^2 + (pst(2, :) - state_vector(2, :)).^2);
+figure; hold on
+plot(time_slice, pst_err);
+xlabel("Time(s)"); ylabel("pst err");  grid on;
+title("pst err"); hold off;
